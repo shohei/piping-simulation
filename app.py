@@ -2,6 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.constants import g
 import numpy as np
+import scipy.optimize as opt
 
 def downsample_to_N(data, N=20):
     n = len(data)
@@ -10,7 +11,7 @@ def downsample_to_N(data, N=20):
     indices = np.linspace(0, n-1, N, dtype=int)
     return np.array([data[i] for i in indices])
 
-def orifice_discharge(P1, P2, d_orifice, Cd, rho):
+def orifice_discharge(P1, P2, d_orifice, Cd, rho, pipe_pressure_loss):
     """
     Function to compute flow rate through an orifice
     
@@ -24,12 +25,58 @@ def orifice_discharge(P1, P2, d_orifice, Cd, rho):
     """
     A_orifice = np.pi * (d_orifice / 2) ** 2  # Area of orifice (m^2)
     dP = P1 - P2  
+    print('P1, P2, dP,',P1, P2,dP)
+    if abs(dP)-pipe_pressure_loss < 0:
+        return 0
     if dP < 0:
         dP = -dP 
-        Q = - Cd * A_orifice * np.sqrt(2 * dP / rho) 
+        dP = dP - pipe_pressure_loss
+        Q = - Cd * A_orifice * np.sqrt(2 * dP / rho)  # m^3/s
     else:
-        Q = Cd * A_orifice * np.sqrt(2 * dP / rho) 
+        dP = dP - pipe_pressure_loss
+        Q = Cd * A_orifice * np.sqrt(2 * dP / rho)  # m^3/s
     return Q
+
+def pressure_loss(L, D, rho, v, mu, epsilon=0):
+    """
+    ダルシー・ワイスバッハの式を用いて配管の圧力損失を計算
+    
+    Parameters:
+        L (float): 配管の長さ (m)
+        D (float): 配管の内径 (m)
+        rho (float): 流体の密度 (kg/m³)
+        v (float): 流速 (m/s)
+        mu (float): 流体の動粘度 (Pa·s)
+        epsilon (float): 配管の粗さ (m)（デフォルト 0：スムーズな管）
+    
+    Returns:
+        float: 圧力損失 ΔP (Pa)
+    """
+    # 動粘度 ν = μ / ρ
+    nu = mu / rho
+    # レイノルズ数 Re = ρ v D / μ
+    Re = rho * v * D / mu
+    
+    # 摩擦係数 f の計算
+    print("Re:",Re)
+    if Re < 2000:
+        # 層流領域（Poiseuille Flow）
+        print('層流 Poiseuille Flow Re < 2000')
+        f = 64 / Re
+    else:
+        # 乱流領域（Colebrook-White equation を数値解）
+        print('乱流')
+        def colebrook(f):
+            return 1 / np.sqrt(f) + 2.0 * np.log10(epsilon / (3.7 * D) + 2.51 / (Re * np.sqrt(f)))
+
+        f_initial = 0.02  # 初期推定値
+        f = opt.fsolve(colebrook, f_initial)[0]
+    print('Friction factor f:',f)
+
+    # 圧力損失 ΔP = f * (L/D) * (ρ v² / 2)
+    delta_P = f * (L / D) * (rho * v**2 / 2)
+    
+    return delta_P
 
 def simulate_pressure_variation(P1_init, P2_init, V1, V2, V3, d_orifice_left, d_orifice_right, Cd, rho, dt, t_max):
     """
@@ -58,20 +105,38 @@ def simulate_pressure_variation(P1_init, P2_init, V1, V2, V3, d_orifice_left, d_
     P3 = P3_init
     
     for _ in t_values[1:]:
+        print("##########")
         # Flow rate through orifice (m^3/s)
         # IMPORTANT!! Order of arguments (i.e., P1, P2) affects the formulation of pressure drop calculation (dP) below
-        Q_left = orifice_discharge(P1, P2, d_orifice_left, Cd, rho) 
-        Q_right = orifice_discharge(P2, P3, d_orifice_right, Cd, rho)
+        Q_left = orifice_discharge(P1, P2, d_orifice_left, Cd, rho, 0) 
+        Q_right = orifice_discharge(P2, P3, d_orifice_right, Cd, rho, 0)
+        print('Flow rate in pipes [m^3/s]:',Q_left,Q_right)
+        # Pressure loss in pipe
+        pipe_length = 1 #[m]
+        pipe_diameter_1 = 0.05 #[m]
+        pipe_diameter_2 = 0.025 #[m]
+        # Velocity calculation: v [m/s] = Q*A
+        v_left = abs(Q_left)/(np.pi/4*pipe_diameter_1**2)
+        v_right = abs(Q_right)/(np.pi/4*pipe_diameter_2**2)
+        print('Velocity in pipes [m/s]:',v_left,v_right)
+        # pressure_loss(L, D, rho, v, mu)
+        mu = 1.882e-5# viscosity of air [Pa·s]
+        pressure_loss_left = pressure_loss(pipe_length, pipe_diameter_1, rho, v_left , mu)
+        pressure_loss_right = pressure_loss(pipe_length, pipe_diameter_2, rho, v_right, mu)    
+        print('pressure loss in pipes [Pa]:',pressure_loss_left, pressure_loss_right)
         # Change of mass in tanks
-        dV_left = Q_left * dt  # Volume change (m^3)
-        dV_right = Q_right * dt  # Volume change (m^3)
+        Q_left_new = orifice_discharge(P1, P2, d_orifice_left, Cd, rho, pressure_loss_left) 
+        Q_right_new = orifice_discharge(P2, P3, d_orifice_right, Cd, rho, pressure_loss_right)
+        dV_left = Q_left_new * dt  # Volume change (m^3)
+        dV_right = Q_right_new * dt  # Volume change (m^3)
         dP1 = - (P1 / V1) * dV_left  # Pressure change in tank 1
         dP2 = (P2 / V2) * dV_left - (P2 / V2) * dV_right # Pressure change in tank 2
         dP3 =  (P3 / V3) * dV_right # Pressure change in tank 3
+        print('Pressure changes in tanks[Pa]:',dP1,dP2,dP3)
         P1 += dP1
         P2 += dP2
         P3 += dP3
-        print(P1,P2,P3)
+        # print(P1,P2,P3)
 
         P1_values.append(P1)
         P2_values.append(P2)
@@ -91,7 +156,7 @@ d_orifice_right = 0.025  # Orifice diameter (m)
 Cd = 1.0  # Discharge coefficient of orifice 
 rho = 1.293 # Density of fluid (kg/m^3)
 dt = 0.1  # Time step (s)
-t_max = 40 # Total simulation time (s)
+t_max = 125 # Total simulation time (s)
 
 # Run simulation 
 t_values, P1_values, P2_values, P3_values = simulate_pressure_variation(P1_init, P2_init, V1, V2, V3,
