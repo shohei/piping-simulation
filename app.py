@@ -59,14 +59,15 @@ def simulate_pressure_variation(P1_init, P2_init, V1, V2, V3, d_orifice_left, d_
     
     for _ in t_values[1:]:
         # Flow rate through orifice (m^3/s)
-        Q_left = orifice_discharge(P1, P2, d_orifice_left, Cd, rho)
+        # IMPORTANT!! Order of arguments (i.e., P1, P2) affects the formulation of pressure drop calculation (dP) below
+        Q_left = orifice_discharge(P1, P2, d_orifice_left, Cd, rho) 
         Q_right = orifice_discharge(P2, P3, d_orifice_right, Cd, rho)
         # Change of mass in tanks
-        dV_left = Q_left * dt  # 体積変化量 (m^3)
-        dV_right = Q_right * dt  # 体積変化量 (m^3)
-        dP1 = - (P1 / V1) * dV_left  # タンク1の圧力変化
-        dP2 = (P2 / V2) * dV_left - (P2 / V2) * dV_right # タンク2の圧力変化
-        dP3 =  (P3 / V3) * dV_right
+        dV_left = Q_left * dt  # Volume change (m^3)
+        dV_right = Q_right * dt  # Volume change (m^3)
+        dP1 = - (P1 / V1) * dV_left  # Pressure change in tank 1
+        dP2 = (P2 / V2) * dV_left - (P2 / V2) * dV_right # Pressure change in tank 2
+        dP3 =  (P3 / V3) * dV_right # Pressure change in tank 3
         P1 += dP1
         P2 += dP2
         P3 += dP3
