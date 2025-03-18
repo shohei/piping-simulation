@@ -6,9 +6,9 @@ import numpy as np
 def downsample_to_N(data, N=20):
     n = len(data)
     if n <= N:
-        return data  
+        return np.array(data)
     indices = np.linspace(0, n-1, N, dtype=int)
-    return [data[i] for i in indices]
+    return np.array([data[i] for i in indices])
 
 def orifice_discharge(P1, P2, d_orifice, Cd, rho):
     """
@@ -90,7 +90,7 @@ d_orifice_left = 0.05  # Orifice diameter (m)
 d_orifice_right = 0.025  # Orifice diameter (m)
 Cd = 1.0  # Discharge coefficient of orifice 
 rho = 1.293 # Density of fluid (kg/m^3)
-dt = 0.01  # Time step (s)
+dt = 0.1  # Time step (s)
 t_max = 40 # Total simulation time (s)
 
 # Run simulation 
@@ -98,37 +98,42 @@ t_values, P1_values, P2_values, P3_values = simulate_pressure_variation(P1_init,
                                                              d_orifice_left, d_orifice_right,
                                                              Cd, rho, dt, t_max)
 
-# 結果のプロット
-
+# Plot of the result
 REALTIME_PLOT = False
+# REALTIME_PLOT = True 
 plt.legend(['Tank1','Tank2', 'Tank3'])
 plt.xlabel('Time (s)')
-plt.ylabel('Pressure (Pa)')
+plt.ylabel('Pressure (kPa)')
 plt.title('Pressure Variation between Tanks')
 plt.grid()
 if REALTIME_PLOT:
     for i in range(len(t_values)):
         t =  downsample_to_N(t_values[:i])
-        P1 = downsample_to_N(P1_values[:i])
-        P2 = downsample_to_N(P2_values[:i])
-        P3 = downsample_to_N(P3_values[:i])
+        P1 = downsample_to_N(P1_values[:i])/1e3
+        P2 = downsample_to_N(P2_values[:i])/1e3
+        P3 = downsample_to_N(P3_values[:i])/1e3
         plt.cla()
+        plt.legend(['Tank1','Tank2', 'Tank3'])
+        plt.xlabel('Time (s)')
+        plt.ylabel('Pressure (kPa)')
+        plt.title('Pressure Variation between Tanks')
+        plt.grid()
         plt.xlim(0, t_max)
-        plt.ylim(0, 900e3)
-        plt.plot(t, P1, 'r-')
-        plt.plot(t, P2, 'b-')
-        plt.plot(t, P3, 'k-')
+        plt.ylim(500, 900)
+        plt.plot(t, P1, 'b-')
+        plt.plot(t, P2, 'r-')
+        plt.plot(t, P3, 'g-')
         plt.pause(0.0000001)
     plt.show()
 else:
     N = 40
     t =  downsample_to_N(t_values, N)
-    P1 = downsample_to_N(P1_values, N)
-    P2 = downsample_to_N(P2_values, N)
-    P3 = downsample_to_N(P3_values, N)
+    P1 = downsample_to_N(P1_values, N)/1e3
+    P2 = downsample_to_N(P2_values, N)/1e3
+    P3 = downsample_to_N(P3_values, N)/1e3
     plt.xlim(0, t_max)
-    plt.ylim(500e3, 800e3)
-    plt.plot(t, P1, 'r-')
-    plt.plot(t, P2, 'g-')
-    plt.plot(t, P3, 'b-')
+    plt.ylim(500, 800)
+    plt.plot(t, P1, 'b-')
+    plt.plot(t, P2, 'r-')
+    plt.plot(t, P3, 'g-')
     plt.show()
