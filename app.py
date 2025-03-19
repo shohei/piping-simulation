@@ -99,6 +99,43 @@ def pressure_loss(L, D, rho, v, mu, P1, P2, epsilon=0):
     
     return delta_P
 
+def solve_nonlinear_equation(L, D, rho, P1, P2, Cd, mu, x_old):
+    def f1(v):
+        Re = rho * v * D / mu
+        if Re < 2000:
+            f = 64 / Re
+        else:
+            def colebrook(f):
+                epsilon = 0.0
+                return 1 / np.sqrt(f) + 2.0 * np.log10(epsilon / (3.7 * D) + 2.51 / (Re * np.sqrt(f)))
+            f_initial = 0.02  # initial estimate 
+            f = opt.fsolve(colebrook, f_initial)[0]
+        return f
+    def f2(dP):
+        K_reverse = 1.0
+        K_forward = 0.5
+        if dP < 0:
+            K = K_reverse
+        else:
+            K = K_forward
+        return K
+    def f3(dP):
+        A = np.pi * (D / 2)**2
+        if dP < 0:
+            Q =  - Cd * A * np.sqrt(- 2 * dP / rho)
+        else:  
+            Q = Cd * A * np.sqrt(2 * dP / rho)
+        return  Q
+    def func(x):
+        return [x[0] - (x[1] * L / D + x[2]) * rho*(x[5]**2)/2,
+                x[1] - f1(x[5]),
+                x[2] - f2(P1 - P2),
+                x[3] - (P1 - P2) - x[0],
+                x[4] - f3(P1 - P2),
+                x[5] - x[4] / (np.pi * (D / 2)**2)]
+    x_new = opt.fsolve(func, x_old) 
+    return x_new
+
 def simulate_pressure_variation(P1_init, P2_init, V1, V2, V3, d_orifice_left, d_orifice_right, Cd, rho, dt, t_max):
     """
     Simulation of pressure fluctuations in two tanks connected via an orifice
@@ -124,30 +161,20 @@ def simulate_pressure_variation(P1_init, P2_init, V1, V2, V3, d_orifice_left, d_
     P1 = P1_init
     P2 = P2_init
     P3 = P3_init
+
+    x_left = [1,1,1,1,1,1] # solution vector initialization
+    x_right = [1,1,1,1,1,1] # solution vector initialization
     
     for _ in t_values[1:]:
         print("##########")
-        # Flow rate through orifice (m^3/s)
-        # IMPORTANT!! Order of arguments (i.e., P1, P2) affects the formulation of pressure drop calculation (dP) below
-        Q_left = orifice_discharge(P1, P2, d_orifice_left, Cd, rho, 0) 
-        Q_right = orifice_discharge(P2, P3, d_orifice_right, Cd, rho, 0)
-        print('Flow rate in pipes [m^3/s]:',Q_left,Q_right)
-        # Pressure loss in pipe
         pipe_length = 1 #[m]
         pipe_diameter_1 = 0.05 #[m]
         pipe_diameter_2 = 0.025 #[m]
-        # Velocity calculation: v [m/s] = Q*A
-        v_left = abs(Q_left)/(np.pi/4*pipe_diameter_1**2)
-        v_right = abs(Q_right)/(np.pi/4*pipe_diameter_2**2)
-        print('Velocity in pipes [m/s]:',v_left,v_right)
-        # pressure_loss(L, D, rho, v, mu)
         mu = 1.882e-5# viscosity of air [Pa·s]
-        pressure_loss_left = pressure_loss(pipe_length, pipe_diameter_1, rho, v_left , mu, P1, P2)
-        pressure_loss_right = pressure_loss(pipe_length, pipe_diameter_2, rho, v_right, mu, P2, P3)    
-        print('pressure loss in pipes [Pa]:',pressure_loss_left, pressure_loss_right)
-        # Change of mass in tanks
-        Q_left_new = orifice_discharge(P1, P2, d_orifice_left, Cd, rho, pressure_loss_left) 
-        Q_right_new = orifice_discharge(P2, P3, d_orifice_right, Cd, rho, pressure_loss_right)
+        x_left = solve_nonlinear_equation(pipe_length, pipe_diameter_1, rho, P1, P2, Cd, mu, x_left)
+        x_right = solve_nonlinear_equation(pipe_length, pipe_diameter_2, rho, P2, P3, Cd, mu, x_right)
+        Q_left_new = x_left[4]
+        Q_right_new = x_right[4]
         dV_left = Q_left_new * dt  # Volume change (m^3)
         dV_right = Q_right_new * dt  # Volume change (m^3)
         dP1 = - (P1 / V1) * dV_left  # Pressure change in tank 1
