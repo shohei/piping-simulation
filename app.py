@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 from scipy.constants import g
 import numpy as np
 import scipy.optimize as opt
+from termcolor import colored
 
 def downsample_to_N(data, N=20):
     n = len(data)
@@ -27,7 +28,21 @@ def orifice_discharge(P1, P2, d_orifice, Cd, rho, pipe_pressure_loss):
     dP = P1 - P2  
     print('P1, P2, dP,',P1, P2,dP)
     if abs(dP)-pipe_pressure_loss < 0:
-        return 0
+        if abs(abs(dP)-pipe_pressure_loss) < 1e-3:
+            # オリフィス前後の圧力差と配管の圧力損失が等しい場合、流体の移動は停止
+            return 0
+        elif abs(dP) - pipe_pressure_loss < 0:
+            # 配管での圧力損失が流体の逆流を誘起する場合
+            print(colored('Reverse flow induced by pipe pressure loss','red'))
+            # TODO: 配管が逆流するのでK factorが異なることになる。計算をやり直す必要がある
+            dP = -(abs(dP) - pipe_pressure_loss)
+            Q = - Cd * A_orifice * np.sqrt(2 * dP / rho)
+            return Q
+        else:
+            dP = dP - pipe_pressure_loss
+            # 通常の計算
+            Q = Cd * A_orifice * np.sqrt(2 * dP / rho)  # m^3/s
+            return Q
     if dP < 0:
         dP = -dP 
         dP = dP - pipe_pressure_loss
@@ -37,7 +52,7 @@ def orifice_discharge(P1, P2, d_orifice, Cd, rho, pipe_pressure_loss):
         Q = Cd * A_orifice * np.sqrt(2 * dP / rho)  # m^3/s
     return Q
 
-def pressure_loss(L, D, rho, v, mu, epsilon=0):
+def pressure_loss(L, D, rho, v, mu, P1, P2, epsilon=0):
     """
     ダルシー・ワイスバッハの式を用いて配管の圧力損失を計算
     
@@ -74,7 +89,13 @@ def pressure_loss(L, D, rho, v, mu, epsilon=0):
     print('Friction factor f:',f)
 
     # 圧力損失 ΔP = f * (L/D) * (ρ v² / 2)
-    delta_P = f * (L / D) * (rho * v**2 / 2)
+    K_forward = 0.5
+    K_reverse = 1.0
+    if (P1-P2)>0: 
+        K = K_forward
+    else:
+        K = K_reverse
+    delta_P = (f*L/D + K) * (rho * v**2 / 2)
     
     return delta_P
 
@@ -121,8 +142,8 @@ def simulate_pressure_variation(P1_init, P2_init, V1, V2, V3, d_orifice_left, d_
         print('Velocity in pipes [m/s]:',v_left,v_right)
         # pressure_loss(L, D, rho, v, mu)
         mu = 1.882e-5# viscosity of air [Pa·s]
-        pressure_loss_left = pressure_loss(pipe_length, pipe_diameter_1, rho, v_left , mu)
-        pressure_loss_right = pressure_loss(pipe_length, pipe_diameter_2, rho, v_right, mu)    
+        pressure_loss_left = pressure_loss(pipe_length, pipe_diameter_1, rho, v_left , mu, P1, P2)
+        pressure_loss_right = pressure_loss(pipe_length, pipe_diameter_2, rho, v_right, mu, P2, P3)    
         print('pressure loss in pipes [Pa]:',pressure_loss_left, pressure_loss_right)
         # Change of mass in tanks
         Q_left_new = orifice_discharge(P1, P2, d_orifice_left, Cd, rho, pressure_loss_left) 
