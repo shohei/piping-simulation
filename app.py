@@ -28,21 +28,22 @@ def orifice_discharge(P1, P2, d_orifice, Cd, rho, pipe_pressure_loss):
     dP = P1 - P2  
     print('P1, P2, dP,',P1, P2,dP)
     if abs(dP)-pipe_pressure_loss < 0:
-        if abs(abs(dP)-pipe_pressure_loss) < 1e-3:
-            # オリフィス前後の圧力差と配管の圧力損失が等しい場合、流体の移動は停止
-            return 0
-        elif abs(dP) - pipe_pressure_loss < 0:
-            # 配管での圧力損失が流体の逆流を誘起する場合
-            print(colored('Reverse flow induced by pipe pressure loss','red'))
-            # TODO: 配管が逆流するのでK factorが異なることになる。計算をやり直す必要がある
-            dP = -(abs(dP) - pipe_pressure_loss)
-            Q = - Cd * A_orifice * np.sqrt(2 * dP / rho)
-            return Q
-        else:
-            dP = dP - pipe_pressure_loss
-            # 通常の計算
-            Q = Cd * A_orifice * np.sqrt(2 * dP / rho)  # m^3/s
-            return Q
+        return 0
+        # if abs(abs(dP)-pipe_pressure_loss) < 1e-3:
+        #     # オリフィス前後の圧力差と配管の圧力損失が等しい場合、流体の移動は停止
+        #     return 0
+        # elif abs(dP) - pipe_pressure_loss < 0:
+        #     # 配管での圧力損失が流体の逆流を誘起する場合
+        #     print(colored('Reverse flow induced by pipe pressure loss','red'))
+        #     # TODO: 配管が逆流するのでK factorが異なることになる。計算をやり直す必要がある
+        #     dP = -(abs(dP) - pipe_pressure_loss)
+        #     Q = - Cd * A_orifice * np.sqrt(2 * dP / rho)
+        #     return Q
+        # else:
+        #     dP = dP - pipe_pressure_loss
+        #     # 通常の計算
+        #     Q = Cd * A_orifice * np.sqrt(2 * dP / rho)  # m^3/s
+        #     return Q
     if dP < 0:
         dP = -dP 
         dP = dP - pipe_pressure_loss
@@ -95,7 +96,8 @@ def pressure_loss(L, D, rho, v, mu, P1, P2, epsilon=0):
         K = K_forward
     else:
         K = K_reverse
-    delta_P = (f*L/D + K) * (rho * v**2 / 2)
+    # delta_P = (f*L/D + K) * (rho * v**2 / 2)
+    delta_P = (f*L/D) * (rho * v**2 / 2)
     
     return delta_P
 
