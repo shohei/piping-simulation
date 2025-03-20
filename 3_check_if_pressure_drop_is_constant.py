@@ -211,43 +211,15 @@ t_values, P1_values, P2_values, P3_values = simulate_pressure_variation(P1_init,
                                                              d_orifice_left, d_orifice_right,
                                                              Cd, rho, dt, t_max)
 
-# Plot of the result
-REALTIME_PLOT = False
-# REALTIME_PLOT = True 
-plt.legend(['Tank1','Tank2', 'Tank3'])
 plt.xlabel('Time (s)')
-plt.ylabel('Pressure (kPa)')
-plt.title('Pressure Variation between Tanks')
+plt.ylabel('Pressure drop in orifice (bar)')
+plt.title('Pressure drop at orifice')
 plt.grid()
-if REALTIME_PLOT:
-    for i in range(len(t_values)):
-        t =  downsample_to_N(t_values[:i])
-        P1 = downsample_to_N(P1_values[:i])/1e3
-        P2 = downsample_to_N(P2_values[:i])/1e3
-        P3 = downsample_to_N(P3_values[:i])/1e3
-        plt.cla()
-        plt.legend(['Tank1','Tank2', 'Tank3'])
-        plt.xlabel('Time (s)')
-        plt.ylabel('Pressure (kPa)')
-        plt.title('Pressure Variation between Tanks')
-        plt.grid()
-        plt.xlim(0, t_max)
-        plt.ylim(500, 900)
-        plt.plot(t, P1, 'b-')
-        plt.plot(t, P2, 'r-')
-        plt.plot(t, P3, 'g-')
-        plt.pause(0.0000001)
-    plt.show()
-else:
-    N = 40
-    t =  downsample_to_N(t_values, N)
-    P1 = downsample_to_N(P1_values, N)/1e3
-    P2 = downsample_to_N(P2_values, N)/1e3
-    P3 = downsample_to_N(P3_values, N)/1e3
-    plt.xlim(0, t_max)
-    plt.ylim(500, 800)
-    plt.plot(t, P1, 'b-')
-    plt.plot(t, P2, 'r-')
-    plt.plot(t, P3, 'g-')
-    plt.legend(['Tank1','Tank2', 'Tank3'])
-    plt.show()
+N = 40
+t =  downsample_to_N(t_values, N)
+dP1 = downsample_to_N(P1_values, N)/100e3 - downsample_to_N(P2_values, N)/100e3
+dP2 = downsample_to_N(P3_values, N)/100e3 - downsample_to_N(P2_values, N)/100e3 
+plt.plot(t, dP1, 'b-')
+plt.plot(t, dP2, 'r-')
+plt.legend(['ΔP1','ΔP2'])
+plt.show()

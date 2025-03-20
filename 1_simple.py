@@ -224,4 +224,5 @@ else:
     plt.plot(t, P1, 'b-')
     plt.plot(t, P2, 'r-')
     plt.plot(t, P3, 'g-')
+    plt.legend(['Tank1','Tank2', 'Tank3'])
     plt.show()
